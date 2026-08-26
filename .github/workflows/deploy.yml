@@ -5,10 +5,7 @@ on:
     branches: [main]
 
 env:
-  # Troque pelo domínio real da API antes do primeiro deploy (e no
-  # deploy/nginx.conf.example). O bot em si não precisa de domínio, só a
-  # API Fastify.
-  DOMAIN: ingresso-api.SEUDOMINIO.com.br
+  DOMAIN: cine.devgustavor.com.br
   APP_DIR: /opt/ingresso_telegram
 
 jobs:

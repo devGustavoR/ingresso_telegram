@@ -15,37 +15,14 @@ sozinho, sem precisar entrar na VPS:
 Pressupõe Docker, Nginx e certbot já instalados na VPS (mesmo padrão do
 `niver_amor`).
 
+Domínio da API: `cine.devgustavor.com.br`.
+
 ## O que falta configurar (tudo pela web, nada na VPS)
 
-### 1. Trocar o domínio placeholder
+Repositório: [devGustavoR/ingresso_telegram](https://github.com/devGustavoR/ingresso_telegram)
+— já criado e com o primeiro commit enviado.
 
-O domínio da API está como placeholder — troque `SEUDOMINIO` pelo domínio
-real nos dois arquivos abaixo **antes do primeiro push**:
-
-- `.github/workflows/deploy.yml` → variável `DOMAIN`
-- `deploy/nginx.conf.example` → `server_name`
-
-Se você não quiser expor a API publicamente (só o bot precisa rodar),
-remova o serviço `api` do `docker-compose.yml`, o step "Configurar Nginx +
-HTTPS" do workflow e o arquivo `deploy/nginx.conf.example`.
-
-### 2. Criar o repositório no GitHub
-
-Este diretório ainda não é um repositório git. Rode:
-
-```bash
-git init
-git add .
-git commit -m "Deploy inicial"
-git branch -M main
-git remote add origin <URL_DO_SEU_REPO>
-git push -u origin main
-```
-
-O `.gitignore` já exclui `.env` e `sessions/` — confira com `git status`
-antes do primeiro commit que nada sensível está sendo adicionado.
-
-### 3. Secrets do GitHub (Settings → Secrets and variables → Actions)
+### 1. Secrets do GitHub (Settings → Secrets and variables → Actions)
 
 | Secret | Valor |
 |---|---|
@@ -64,9 +41,9 @@ local já passaram por texto puro fora de controle de versão. Considere
 gerar um novo `BOT_TOKEN` no @BotFather (`/revoke`) antes de publicar,
 já que o valor atual pode ter sido exposto.
 
-### 4. DNS (só se for expor a API)
+### 2. DNS
 
-O domínio da API precisa de um registro **A** apontando pro IP da VPS
+`cine.devgustavor.com.br` precisa de um registro **A** apontando pro IP da VPS
 antes do certbot conseguir emitir o certificado. Se o DNS ainda não
 estiver propagado no primeiro deploy, o passo de HTTPS falha
 silenciosamente (não quebra o resto) e tenta de novo automaticamente no
