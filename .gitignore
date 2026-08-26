@@ -1,0 +1,19 @@
+# dependencies
+/node_modules
+
+# build output
+/dist
+*.tsbuildinfo
+
+# env files (never commit secrets)
+.env
+.env.*
+!.env.example
+
+# sessão do bot (estado por usuário, gerado em runtime)
+/sessions/*
+!/sessions/.gitkeep
+
+# misc
+.DS_Store
+*.log

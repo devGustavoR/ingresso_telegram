@@ -1,0 +1,96 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  # Troque pelo domínio real da API antes do primeiro deploy (e no
+  # deploy/nginx.conf.example). O bot em si não precisa de domínio, só a
+  # API Fastify.
+  DOMAIN: ingresso-api.SEUDOMINIO.com.br
+  APP_DIR: /opt/ingresso_telegram
+
+jobs:
+  deploy:
+    name: Deploy na VPS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar chave SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Preparar diretório na VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            # Docker, Nginx e certbot já estão instalados nessa VPS
+            # (compartilhada com outros projetos) — só o rsync recebe uma
+            # checagem de segurança, já que é a única coisa que esse
+            # workflow especificamente precisa.
+            command -v rsync >/dev/null || (apt-get update -y && apt-get install -y rsync)
+            mkdir -p ${{ env.APP_DIR }}/sessions
+
+      - name: Sincronizar arquivos com a VPS
+        run: |
+          rsync -az --delete \
+            --exclude=.git --exclude=node_modules --exclude=dist \
+            --exclude=sessions \
+            -e "ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=no" \
+            ./ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ env.APP_DIR }}/"
+
+      - name: Escrever .env na VPS
+        run: |
+          ssh -i ~/.ssh/id_deploy "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "cat > ${{ env.APP_DIR }}/.env" <<'EOF'
+          PORT=3000
+          BOT_TOKEN=${{ secrets.BOT_TOKEN }}
+          TMDB_API_KEY=${{ secrets.TMDB_API_KEY }}
+          EOF
+
+      - name: Buildar e subir os containers
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd ${{ env.APP_DIR }}
+            docker compose up -d --build
+            docker image prune -f
+
+      - name: Configurar Nginx + HTTPS para a API
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            # A criação do vhost é protegida separadamente do certbot: uma
+            # vez que o certbot funciona, ele reescreve esse arquivo pra
+            # adicionar o bloco SSL, então isso nunca pode recopiar o
+            # template HTTP-only por cima. Mas o certbot em si precisa
+            # continuar tentando a cada deploy até o certificado realmente
+            # existir — senão uma primeira tentativa que falha (ex.: DNS
+            # ainda não propagado) deixa o site preso em HTTP pra sempre.
+            if [ ! -f /etc/nginx/sites-enabled/${{ env.DOMAIN }} ]; then
+              cp ${{ env.APP_DIR }}/deploy/nginx.conf.example /etc/nginx/sites-available/${{ env.DOMAIN }}
+              ln -sf /etc/nginx/sites-available/${{ env.DOMAIN }} /etc/nginx/sites-enabled/${{ env.DOMAIN }}
+              nginx -t && systemctl reload nginx
+            fi
+
+            if [ ! -d /etc/letsencrypt/live/${{ env.DOMAIN }} ]; then
+              certbot --nginx -d ${{ env.DOMAIN }} --non-interactive --agree-tos \
+                --register-unsafely-without-email --redirect
+            fi
