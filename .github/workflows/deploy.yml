@@ -37,6 +37,11 @@ jobs:
             # workflow especificamente precisa.
             command -v rsync >/dev/null || (apt-get update -y && apt-get install -y rsync)
             mkdir -p ${{ env.APP_DIR }}/sessions
+            # o container roda como uid 1001 (appuser, não-root); a pasta
+            # de sessões é montada como bind mount, então precisa já
+            # pertencer a esse uid no host, senão o container não consegue
+            # escrever nela.
+            chown -R 1001:1001 ${{ env.APP_DIR }}/sessions
 
       - name: Sincronizar arquivos com a VPS
         run: |
